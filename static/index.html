@@ -19,7 +19,7 @@ body{font-family:sans-serif;max-width:600px;margin:20px auto;padding:0 12px}
 
 <div id="lobby">
   <h3>이벤트 만들기</h3>
-  <input id="eventName" placeholder="이벤트 이름 (예: 발표 순서 정하기)"> <button onclick="createEvent()">만들기</button>
+  <input id="eventName" placeholder="이벤트 이름 (예: 발표 순서 정하기)"> <button onclick="makeEvent()">만들기</button>
   <div id="createErr" class="err"></div>
 
   <h3>이벤트 목록 (클릭해서 입장)</h3>
@@ -60,7 +60,7 @@ async function loadEvents() {
   });
 }
 
-async function createEvent() {
+async function makeEvent() {
   $("createErr").textContent = "";
   try {
     await api("/api/events", post({name: $("eventName").value}));
