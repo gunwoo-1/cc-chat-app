@@ -1,0 +1,8 @@
+services:
+  chat:
+    build: .
+    ports:
+      - "8080:5000"
+    environment:
+      TZ: KST-9      # 메시지 시간을 한국 시간으로
+    restart: unless-stopped
