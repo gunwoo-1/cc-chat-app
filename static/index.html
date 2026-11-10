@@ -11,6 +11,7 @@ body{font-family:sans-serif;max-width:600px;margin:20px auto;padding:0 12px}
 #events li:hover{background:#f3f3f3}
 #list{border:1px solid #ccc;height:300px;overflow-y:auto;padding:8px;margin:8px 0}
 #mine{font-size:1.3em;font-weight:bold;color:#06c;min-height:1.5em}
+#closed{font-weight:bold;color:#c00;min-height:1.2em}
 .hidden{display:none}
 </style>
 </head>
@@ -19,10 +20,12 @@ body{font-family:sans-serif;max-width:600px;margin:20px auto;padding:0 12px}
 
 <div id="lobby">
   <h3>이벤트 만들기</h3>
-  <input id="eventName" placeholder="이벤트 이름 (예: 발표 순서 정하기)"> <button onclick="makeEvent()">만들기</button>
+  <input id="eventName" placeholder="이벤트 이름 (예: 간식 나눔)">
+  <input id="capacity" type="number" min="1" max="1000" placeholder="정원" style="width:70px">
+  <button onclick="makeEvent()">만들기</button>
   <div id="createErr" class="err"></div>
 
-  <h3>이벤트 목록 (클릭해서 입장)</h3>
+  <h3>이벤트 목록 (이름을 클릭해서 입장)</h3>
   <ul id="events"></ul>
 </div>
 
@@ -33,7 +36,8 @@ body{font-family:sans-serif;max-width:600px;margin:20px auto;padding:0 12px}
   </p>
   <div id="drawErr" class="err"></div>
   <div id="mine"></div>
-  <h3>대기 명단 (<span id="total">0</span>명)</h3>
+  <h3>대기 명단 (<span id="total">0</span>/<span id="cap">0</span>명)</h3>
+  <div id="closed"></div>
   <div id="list"></div>
 </div>
 
@@ -54,7 +58,8 @@ async function loadEvents() {
   $("events").innerHTML = "";
   list.forEach(e => {
     const li = document.createElement("li");
-    li.textContent = `${e.name} (대기 ${e.count}명)`;
+    const full = e.count >= e.capacity;
+    li.textContent = `${e.name} (${e.count}/${e.capacity}명)` + (full ? " [마감]" : "");
     li.onclick = () => enter(e);
     $("events").appendChild(li);
   });
@@ -63,16 +68,17 @@ async function loadEvents() {
 async function makeEvent() {
   $("createErr").textContent = "";
   try {
-    await api("/api/events", post({name: $("eventName").value}));
-    $("eventName").value = "";
+    await api("/api/events", post({name: $("eventName").value, capacity: $("capacity").value}));
+    $("eventName").value = ""; $("capacity").value = "";
     loadEvents();
   } catch (e) { $("createErr").textContent = e.message; }
 }
 
 function enter(e) {
   ev = e; count = 0;
-  $("list").innerHTML = ""; $("mine").textContent = ""; $("drawErr").textContent = "";
-  $("total").textContent = "0";
+  $("list").innerHTML = ""; $("mine").textContent = "";
+  $("drawErr").textContent = ""; $("closed").textContent = "";
+  $("total").textContent = "0"; $("cap").textContent = e.capacity;
   $("eventTitle").textContent = e.name;
   $("lobby").classList.add("hidden");
   $("event").classList.remove("hidden");
@@ -99,6 +105,7 @@ async function poll() {
     });
     count += tickets.length;
     $("total").textContent = count;
+    $("closed").textContent = count >= ev.capacity ? "선착순 마감" : "";
     if (tickets.length) $("list").scrollTop = $("list").scrollHeight;
   } catch (e) {} finally { busy = false; }
 }

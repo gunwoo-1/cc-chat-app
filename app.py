@@ -2,8 +2,8 @@ from flask import Flask, request, jsonify, send_from_directory
 import threading, time
 
 app = Flask(__name__, static_folder="static")
-lock = threading.Lock()   # 동시에 눌러도 번호가 겹치지 않게 하는 잠금
-events = {}               # id -> {"name": 이벤트 이름, "tickets": [번호표 목록]}
+lock = threading.Lock()   # 동시에 눌러도 번호와 정원이 어긋나지 않게 하는 잠금
+events = {}               # id -> {"name": 이름, "capacity": 정원, "tickets": [번호표 목록]}
 next_id = 1
 
 @app.get("/")
@@ -18,24 +18,31 @@ def health():
 @app.get("/api/events")
 def list_events():
     with lock:
-        return jsonify([{"id": i, "name": e["name"], "count": len(e["tickets"])}
-                        for i, e in events.items()])
+        return jsonify([{"id": i, "name": e["name"], "capacity": e["capacity"],
+                         "count": len(e["tickets"])} for i, e in events.items()])
 
 @app.post("/api/events")
 def create_event():
     global next_id
-    name = (request.get_json(silent=True) or {}).get("name", "").strip()
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
     if not name:
         return {"error": "이벤트 이름을 입력하세요"}, 400
     if len(name) > 30:
         return {"error": "이벤트 이름은 30자 이하로 입력하세요"}, 400
+    try:
+        capacity = int(data.get("capacity"))
+    except (TypeError, ValueError):
+        return {"error": "정원을 숫자로 입력하세요"}, 400
+    if not 1 <= capacity <= 1000:
+        return {"error": "정원은 1명 이상 1000명 이하로 입력하세요"}, 400
     with lock:
         if any(e["name"] == name for e in events.values()):
             return {"error": "이미 있는 이벤트입니다"}, 409
         eid = next_id
         next_id += 1
-        events[eid] = {"name": name, "tickets": []}
-    return {"id": eid, "name": name}, 201
+        events[eid] = {"name": name, "capacity": capacity, "tickets": []}
+    return {"id": eid, "name": name, "capacity": capacity}, 201
 
 # 기능 3: 대기 명단 조회
 @app.get("/api/events/<int:eid>/tickets")
@@ -46,10 +53,10 @@ def get_tickets(eid):
             return {"error": "없는 이벤트입니다"}, 404
         return jsonify(events[eid]["tickets"][after:])
 
-# 기능 2: 번호표 뽑기 (서버에 도착한 순서대로 번호 부여)
+# 기능 2: 번호표 뽑기 (도착 순서대로 번호 부여, 정원이 차면 마감)
 @app.post("/api/events/<int:eid>/tickets")
 def draw_ticket(eid):
-    nick = (request.get_json(silent=True) or {}).get("nickname", "").strip()
+    nick = str((request.get_json(silent=True) or {}).get("nickname", "")).strip()
     if not nick:
         return {"error": "닉네임을 입력하세요"}, 400
     if len(nick) > 20:
@@ -60,6 +67,8 @@ def draw_ticket(eid):
         tickets = events[eid]["tickets"]
         if any(t["nickname"] == nick for t in tickets):
             return {"error": "이미 번호표를 받았습니다"}, 409
+        if len(tickets) >= events[eid]["capacity"]:
+            return {"error": "선착순이 마감되었습니다"}, 409
         number = len(tickets) + 1
         tickets.append({"number": number, "nickname": nick,
                         "time": time.strftime("%H:%M:%S")})
