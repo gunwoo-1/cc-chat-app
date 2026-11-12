@@ -5,45 +5,157 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>선착순 번호표</title>
 <style>
-body{font-family:sans-serif;max-width:600px;margin:20px auto;padding:0 12px}
-.err{color:#c00;min-height:1.2em}
-#events li{cursor:pointer;padding:6px;border-bottom:1px solid #ddd}
-#events li:hover{background:#f3f3f3}
-#list{border:1px solid #ccc;height:300px;overflow-y:auto;padding:8px;margin:8px 0}
-#mine{font-size:1.3em;font-weight:bold;color:#06c;min-height:1.5em}
-#closed{font-weight:bold;color:#c00;min-height:1.2em}
+:root{
+  --bg:#f4f5fb; --card:#ffffff; --ink:#1c1e2b; --sub:#6b7085; --line:#e6e8f0;
+  --main:#4f46e5; --main-dark:#4338ca; --main-soft:#eef0ff;
+  --ok:#0f9d6c; --ok-soft:#e3f6ee; --stop:#d93a4a; --stop-soft:#fdeaec;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Pretendard","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;line-height:1.5}
+.wrap{max-width:640px;margin:0 auto;padding:28px 16px 60px}
+
+.top{text-align:center;margin-bottom:24px}
+.logo{width:64px;height:64px;margin:0 auto 10px;border-radius:20px;background:var(--main);
+  display:flex;align-items:center;justify-content:center;font-size:32px;
+  box-shadow:0 10px 24px rgba(79,70,229,.3)}
+.top h1{margin:0;font-size:1.7rem;letter-spacing:-.02em}
+.top p{margin:4px 0 0;color:var(--sub);font-size:.95rem}
+
+.card{background:var(--card);border-radius:18px;padding:20px;margin-bottom:16px;
+  box-shadow:0 2px 10px rgba(28,30,43,.06)}
+.card h2{margin:0 0 14px;font-size:1.05rem}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.grow{flex:1 1 180px}
+
+input{height:46px;padding:0 14px;border:1.5px solid var(--line);border-radius:12px;
+  font:inherit;color:inherit;background:#fff;min-width:0;width:100%}
+input:focus{outline:none;border-color:var(--main);box-shadow:0 0 0 3px var(--main-soft)}
+.cap{flex:0 0 96px}
+button{height:46px;padding:0 20px;border:0;border-radius:12px;font:inherit;font-weight:700;
+  cursor:pointer;background:var(--main);color:#fff;transition:background .15s,transform .05s}
+button:hover{background:var(--main-dark)}
+button:active{transform:scale(.97)}
+button.ghost{background:transparent;color:var(--sub);padding:0 8px;height:36px;font-weight:600}
+button.ghost:hover{background:var(--line);color:var(--ink)}
+.err{color:var(--stop);font-size:.9rem;min-height:1.4em;margin-top:8px}
+
+.empty{text-align:center;color:var(--sub);padding:22px 0;font-size:.95rem}
+
+.item{border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px;
+  cursor:pointer;transition:border-color .15s,transform .1s,box-shadow .15s}
+.item:hover{border-color:var(--main);transform:translateY(-1px);box-shadow:0 6px 16px rgba(79,70,229,.12)}
+.item-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.item-name{font-weight:700;overflow-wrap:anywhere}
+.item-meta{color:var(--sub);font-size:.88rem;margin-top:8px}
+
+.badge{flex:none;font-size:.78rem;font-weight:700;padding:4px 10px;border-radius:999px;
+  background:var(--ok-soft);color:var(--ok)}
+.badge.full{background:var(--stop-soft);color:var(--stop)}
+
+.bar{height:8px;background:var(--line);border-radius:999px;overflow:hidden}
+.fill{height:100%;width:0;background:var(--main);border-radius:999px;transition:width .4s}
+.fill.full{background:var(--stop)}
+
+.event-head{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.event-head h2{margin:0;font-size:1.3rem;flex:1;overflow-wrap:anywhere}
+
+.ticket{margin-top:6px;border-radius:16px;padding:18px;text-align:center;color:#fff;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);position:relative;overflow:hidden;
+  box-shadow:0 10px 24px rgba(79,70,229,.3);animation:pop .35s ease-out}
+.ticket::before,.ticket::after{content:"";position:absolute;top:50%;width:24px;height:24px;
+  margin-top:-12px;border-radius:50%;background:var(--card)}
+.ticket::before{left:-12px}
+.ticket::after{right:-12px}
+.ticket small{display:block;opacity:.85;font-size:.85rem}
+.ticket b{display:block;font-size:3rem;line-height:1.15;letter-spacing:-.02em}
+@keyframes pop{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}
+
+.list-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.list-head h2{margin:0}
+.count{color:var(--sub);font-weight:700;font-size:.95rem}
+#list{max-height:340px;overflow-y:auto;margin-top:14px}
+.line{display:flex;align-items:center;gap:12px;padding:10px 8px;border-radius:10px}
+.line + .line{border-top:1px solid var(--line)}
+.num{flex:none;width:38px;height:38px;border-radius:12px;background:var(--main-soft);color:var(--main);
+  display:flex;align-items:center;justify-content:center;font-weight:800}
+.who{flex:1;font-weight:600;overflow-wrap:anywhere}
+.when{color:var(--sub);font-size:.85rem;font-variant-numeric:tabular-nums}
+.line.me{background:var(--main-soft)}
+.line.me .num{background:var(--main);color:#fff}
+
 .hidden{display:none}
+@media (max-width:480px){
+  .cap{flex:1 1 90px}
+  .row button{flex:1 1 100%}
+}
 </style>
 </head>
 <body>
-<h2>선착순 번호표</h2>
+<div class="wrap">
 
-<div id="lobby">
-  <h3>이벤트 만들기</h3>
-  <input id="eventName" placeholder="이벤트 이름 (예: 간식 나눔)">
-  <input id="capacity" type="number" min="1" max="1000" placeholder="정원" style="width:70px">
-  <button onclick="makeEvent()">만들기</button>
-  <div id="createErr" class="err"></div>
+  <header class="top">
+    <div class="logo">🎟️</div>
+    <h1>선착순 번호표</h1>
+    <p>여는 순간 몰려도, 도착한 순서 그대로</p>
+  </header>
 
-  <h3>이벤트 목록 (이름을 클릭해서 입장)</h3>
-  <ul id="events"></ul>
-</div>
+  <div id="lobby">
+    <section class="card">
+      <h2>이벤트 만들기</h2>
+      <div class="row">
+        <div class="grow"><input id="eventName" placeholder="이벤트 이름 (예: 간식 나눔)"></div>
+        <div class="cap"><input id="capacity" type="number" min="1" max="1000" placeholder="정원"></div>
+        <button onclick="makeEvent()">만들기</button>
+      </div>
+      <div id="createErr" class="err"></div>
+    </section>
 
-<div id="event" class="hidden">
-  <h3 id="eventTitle"></h3> <button onclick="leave()">목록으로</button>
-  <p>
-    <input id="nick" placeholder="닉네임"> <button onclick="draw()">번호표 뽑기</button>
-  </p>
-  <div id="drawErr" class="err"></div>
-  <div id="mine"></div>
-  <h3>대기 명단 (<span id="total">0</span>/<span id="cap">0</span>명)</h3>
-  <div id="closed"></div>
-  <div id="list"></div>
+    <section class="card">
+      <h2>이벤트 목록</h2>
+      <div id="events"></div>
+    </section>
+  </div>
+
+  <div id="event" class="hidden">
+    <section class="card">
+      <div class="event-head">
+        <button class="ghost" onclick="leave()">← 목록</button>
+        <h2 id="eventTitle"></h2>
+        <span id="status" class="badge">모집 중</span>
+      </div>
+      <div class="row">
+        <div class="grow"><input id="nick" placeholder="닉네임"></div>
+        <button onclick="draw()">번호표 뽑기</button>
+      </div>
+      <div id="drawErr" class="err"></div>
+      <div id="mine" class="ticket hidden">
+        <small>내 번호표</small>
+        <b id="myNum"></b>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="list-head">
+        <h2>대기 명단</h2>
+        <span class="count"><span id="total">0</span> / <span id="cap">0</span>명</span>
+      </div>
+      <div class="bar"><div id="prog" class="fill"></div></div>
+      <div id="list"></div>
+    </section>
+  </div>
+
 </div>
 
 <script>
-let ev = null, count = 0, timer = null, busy = false;
+let ev = null, count = 0, timer = null, busy = false, myNumber = null;
 const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
 
 async function api(url, opt) {
   const r = await fetch(url, opt);
@@ -54,14 +166,29 @@ async function api(url, opt) {
 const post = body => ({method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
 
 async function loadEvents() {
-  const list = await api("/api/events");
-  $("events").innerHTML = "";
+  let list;
+  try { list = await api("/api/events"); } catch (e) { return; }
+  const box = $("events");
+  box.innerHTML = "";
+  if (!list.length) {
+    box.appendChild(el("div", "empty", "아직 이벤트가 없어요. 첫 이벤트를 만들어 보세요."));
+    return;
+  }
   list.forEach(e => {
-    const li = document.createElement("li");
     const full = e.count >= e.capacity;
-    li.textContent = `${e.name} (${e.count}/${e.capacity}명)` + (full ? " [마감]" : "");
-    li.onclick = () => enter(e);
-    $("events").appendChild(li);
+    const item = el("div", "item");
+    const head = el("div", "item-head");
+    head.appendChild(el("span", "item-name", e.name));
+    head.appendChild(el("span", "badge" + (full ? " full" : ""), full ? "마감" : "모집 중"));
+    const bar = el("div", "bar");
+    const fill = el("div", "fill" + (full ? " full" : ""));
+    fill.style.width = Math.min(100, e.count / e.capacity * 100) + "%";
+    bar.appendChild(fill);
+    item.appendChild(head);
+    item.appendChild(bar);
+    item.appendChild(el("div", "item-meta", `${e.count} / ${e.capacity}명 · 눌러서 입장`));
+    item.onclick = () => enter(e);
+    box.appendChild(item);
   });
 }
 
@@ -74,12 +201,34 @@ async function makeEvent() {
   } catch (e) { $("createErr").textContent = e.message; }
 }
 
+function showEmptyList() {
+  $("list").innerHTML = "";
+  $("list").appendChild(el("div", "empty", "아직 아무도 뽑지 않았어요."));
+}
+
+function updateStatus() {
+  const full = count >= ev.capacity;
+  $("total").textContent = count;
+  $("prog").style.width = Math.min(100, count / ev.capacity * 100) + "%";
+  $("prog").className = "fill" + (full ? " full" : "");
+  $("status").textContent = full ? "마감" : "모집 중";
+  $("status").className = "badge" + (full ? " full" : "");
+}
+
+function markMine() {
+  if (myNumber === null) return;
+  const row = $("list").querySelector(`[data-n="${myNumber}"]`);
+  if (row) row.classList.add("me");
+}
+
 function enter(e) {
-  ev = e; count = 0;
-  $("list").innerHTML = ""; $("mine").textContent = "";
-  $("drawErr").textContent = ""; $("closed").textContent = "";
-  $("total").textContent = "0"; $("cap").textContent = e.capacity;
+  ev = e; count = 0; myNumber = null;
+  showEmptyList();
+  $("mine").classList.add("hidden");
+  $("drawErr").textContent = "";
+  $("cap").textContent = e.capacity;
   $("eventTitle").textContent = e.name;
+  updateStatus();
   $("lobby").classList.add("hidden");
   $("event").classList.remove("hidden");
   poll();
@@ -98,14 +247,18 @@ async function poll() {
   busy = true;
   try {
     const tickets = await api(`/api/events/${ev.id}/tickets?after=${count}`);
+    if (tickets.length && count === 0) $("list").innerHTML = "";
     tickets.forEach(t => {
-      const p = document.createElement("div");
-      p.textContent = `${t.number}번 — ${t.nickname} (${t.time})`;
-      $("list").appendChild(p);
+      const row = el("div", "line");
+      row.dataset.n = t.number;
+      row.appendChild(el("span", "num", t.number));
+      row.appendChild(el("span", "who", t.nickname));
+      row.appendChild(el("span", "when", t.time));
+      $("list").appendChild(row);
     });
     count += tickets.length;
-    $("total").textContent = count;
-    $("closed").textContent = count >= ev.capacity ? "선착순 마감" : "";
+    updateStatus();
+    markMine();
     if (tickets.length) $("list").scrollTop = $("list").scrollHeight;
   } catch (e) {} finally { busy = false; }
 }
@@ -114,12 +267,16 @@ async function draw() {
   $("drawErr").textContent = "";
   try {
     const d = await api(`/api/events/${ev.id}/tickets`, post({nickname: $("nick").value}));
-    $("mine").textContent = `내 번호표: ${d.number}번`;
-    poll();
+    myNumber = d.number;
+    $("myNum").textContent = d.number + "번";
+    $("mine").classList.remove("hidden");
+    await poll();
+    markMine();
   } catch (e) { $("drawErr").textContent = e.message; }
 }
 
 $("nick").addEventListener("keydown", e => { if (e.key === "Enter") draw(); });
+$("eventName").addEventListener("keydown", e => { if (e.key === "Enter") makeEvent(); });
 loadEvents();
 setInterval(() => { if (!ev) loadEvents(); }, 3000);
 </script>
