@@ -20,7 +20,16 @@ def touch():
 def summary(eid, e):
     return {"id": eid, "name": e["name"], "capacity": e["capacity"],
             "count": len(e["tickets"]), "created": e["created"],
-            "open_at": e["open_at"], "closed_sec": e["closed_sec"]}
+            "open_at": e["open_at"], "close_at": e["close_at"],
+            "closed_sec": e["closed_sec"]}
+
+def read_minutes(data, key, max_value):
+    """분 단위 입력을 정수로 읽는다. 잘못된 값이면 None"""
+    try:
+        value = int(data.get(key, 0))
+    except (TypeError, ValueError):
+        return None
+    return value if 0 <= value <= max_value else None
 
 @app.get("/")
 def index():
@@ -62,14 +71,16 @@ def create_event():
         return {"error": "정원을 숫자로 입력하세요"}, 400
     if not 1 <= capacity <= 1000:
         return {"error": "정원은 1명 이상 1000명 이하로 입력하세요"}, 400
-    try:
-        open_in = int(data.get("open_in", 0))
-    except (TypeError, ValueError):
-        open_in = 0
-    if not 0 <= open_in <= 60:
+    open_in = read_minutes(data, "open_in", 60)
+    if open_in is None:
         return {"error": "오픈 예약은 0~60분 사이로 정하세요"}, 400
+    close_in = read_minutes(data, "close_in", 180)
+    if close_in is None:
+        return {"error": "마감 시각은 오픈 후 0~180분 사이로 정하세요"}, 400
 
     now = time.time()
+    open_at = now + open_in * 60
+    close_at = open_at + close_in * 60 if close_in > 0 else None   # 0이면 마감 시각 없음
     with lock:
         if name in names:
             return {"error": "이미 있는 이벤트입니다"}, 409
@@ -77,8 +88,8 @@ def create_event():
         next_id += 1
         names.add(name)
         events[eid] = {"name": name, "capacity": capacity,
-                       "tickets": [], "nicknames": set(),
-                       "created": now, "open_at": now + open_in * 60, "closed_sec": None}
+                       "tickets": [], "nicknames": set(), "created": now,
+                       "open_at": open_at, "close_at": close_at, "closed_sec": None}
         touch()
     return {"id": eid, "name": name, "capacity": capacity}, 201
 
@@ -95,7 +106,7 @@ def get_tickets(eid):
         return jsonify({"now": time.time(), "closed_sec": e["closed_sec"],
                         "tickets": e["tickets"][after:]})
 
-# 기능 2: 번호표 뽑기 (오픈 시각 → 중복 → 정원 순서로 검사 후 번호 발급)
+# 기능 2: 번호표 뽑기 (오픈 시각 → 마감 시각 → 중복 → 정원 순서로 검사 후 번호 발급)
 @app.post("/api/events/<int:eid>/tickets")
 def draw_ticket(eid):
     nick = str((request.get_json(silent=True) or {}).get("nickname", "")).strip()
@@ -111,6 +122,8 @@ def draw_ticket(eid):
             return {"error": "없는 이벤트입니다"}, 404
         if now < e["open_at"]:
             return {"error": f"아직 오픈 전입니다 ({int(e['open_at'] - now) + 1}초 남음)"}, 403
+        if e["close_at"] is not None and now >= e["close_at"]:
+            return {"error": "모집 시간이 끝났습니다"}, 409
         if nick in e["nicknames"]:
             return {"error": "이미 번호표를 받았습니다"}, 409
         if len(e["tickets"]) >= e["capacity"]:

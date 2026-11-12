@@ -108,10 +108,10 @@ button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none;fi
 .ticket b{display:block;font-size:3.4rem;line-height:1.1;letter-spacing:-.03em}
 .ticket span{opacity:.85;font-size:.9rem}
 @keyframes pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
-.mini{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.mini{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:16px}
 .mini div{background:var(--bg);border-radius:14px;padding:12px 14px}
 .mini span{display:block;color:var(--sub);font-size:.8rem;font-weight:700}
-.mini b{font-size:1.4rem}
+.mini b{font-size:1.3rem;font-variant-numeric:tabular-nums}
 
 .list-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .live{display:flex;align-items:center;gap:6px;color:var(--stop);font-weight:800;font-size:.8rem}
@@ -189,6 +189,15 @@ footer{text-align:center;color:var(--sub);font-size:.82rem;padding:10px 0 40px}
             </select>
           </div>
         </div>
+        <div class="field">
+          <label for="closeIn">마감 시각</label>
+          <select id="closeIn">
+            <option value="0">마감 없음 (정원이 찰 때까지)</option>
+            <option value="10">오픈 후 10분</option>
+            <option value="30">오픈 후 30분</option>
+            <option value="60">오픈 후 1시간</option>
+          </select>
+        </div>
         <button class="block" onclick="makeEvent()">이벤트 열기</button>
         <div id="createErr" class="err"></div>
       </section>
@@ -196,9 +205,9 @@ footer{text-align:center;color:var(--sub);font-size:.82rem;padding:10px 0 40px}
       <section class="card">
         <div class="card-title"><h2>이용 방법</h2></div>
         <div class="steps">
-          <div class="step"><div class="step-num">1</div><div><b>이벤트를 예약해요</b><span>이름, 정원, 오픈 시각을 정해요.</span></div></div>
+          <div class="step"><div class="step-num">1</div><div><b>이벤트를 예약해요</b><span>이름, 정원, 오픈·마감 시각을 정해요.</span></div></div>
           <div class="step"><div class="step-num">2</div><div><b>링크를 공유해요</b><span>단톡방에 링크를 올리면 바로 입장할 수 있어요.</span></div></div>
-          <div class="step"><div class="step-num">3</div><div><b>오픈 순간 뽑아요</b><span>서버 도착 순서대로 번호가 매겨지고, 정원이 차면 마감돼요.</span></div></div>
+          <div class="step"><div class="step-num">3</div><div><b>오픈 순간 뽑아요</b><span>서버 도착 순서대로 번호가 매겨지고, 정원이 차거나 시간이 되면 마감돼요.</span></div></div>
         </div>
       </section>
     </aside>
@@ -246,6 +255,7 @@ footer{text-align:center;color:var(--sub);font-size:.82rem;padding:10px 0 40px}
         <div class="mini">
           <div><span>남은 자리</span><b id="left">0</b></div>
           <div><span>정원</span><b id="cap">0</b></div>
+          <div><span>마감까지</span><b id="closeLeft">-</b></div>
         </div>
       </section>
     </aside>
@@ -293,6 +303,10 @@ const fmt = s => {
   s = Math.max(0, Math.ceil(s));
   return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
 };
+
+// 마감 판단: 정원이 찼거나, 마감 시각이 지났으면 마감
+const timeOver = e => e.close_at !== null && e.close_at !== undefined && now() >= e.close_at;
+const isClosed = (e, n) => n >= e.capacity || timeOver(e);
 
 // 내 번호표 기억 (서버를 다시 빌드하면 id가 재사용되므로 생성 시각까지 키에 포함)
 const storeKey = e => `ticket-${e.id}-${e.created}`;
@@ -352,7 +366,7 @@ async function eventLoop(signal) {
 // ===== 목록 화면 =====
 function updateStats(list) {
   const t = now();
-  const open = list.filter(e => e.count < e.capacity && t >= e.open_at).length;
+  const open = list.filter(e => !isClosed(e, e.count) && t >= e.open_at).length;
   const tickets = list.reduce((s, e) => s + e.count, 0);
   const records = list.map(e => e.closed_sec).filter(x => x !== null);
   $("sEvents").textContent = list.length;
@@ -376,7 +390,7 @@ function renderLobby() {
   }
   const frag = document.createDocumentFragment();   // 한 번에 붙여서 화면 갱신 1회
   list.slice().reverse().forEach(e => {
-    const full = e.count >= e.capacity;
+    const full = isClosed(e, e.count);
     const waiting = now() < e.open_at;
     const ratio = e.count / e.capacity;
     const card = el("div", "ev" + (full ? " full" : waiting ? " soon" : ""));
@@ -396,8 +410,16 @@ function renderLobby() {
     bar.appendChild(fill);
     const foot = el("div", "ev-foot");
     const info = el("span", "", `남은 자리 ${e.capacity - e.count}`);
-    if (full) info.textContent = e.closed_sec !== null ? `⚡ ${e.closed_sec.toFixed(2)}초 만에 마감` : "자리 없음";
-    else if (waiting) { info.dataset.open = e.open_at; info.textContent = `⏰ ${fmt(e.open_at - now())} 후 오픈`; }
+    if (full) {
+      if (e.count >= e.capacity && e.closed_sec !== null) info.textContent = `⚡ ${e.closed_sec.toFixed(2)}초 만에 마감`;
+      else info.textContent = timeOver(e) ? "⏱ 모집 시간 종료" : "자리 없음";
+    } else if (waiting) {
+      info.dataset.open = e.open_at;
+      info.textContent = `⏰ ${fmt(e.open_at - now())} 후 오픈`;
+    } else if (e.close_at !== null) {
+      info.dataset.close = e.close_at;
+      info.textContent = `⏱ ${fmt(e.close_at - now())} 후 마감`;
+    }
     foot.append(info, el("span", "", "입장 →"));
     card.append(head, num, bar, foot);
     card.onclick = () => enter(e);
@@ -410,8 +432,9 @@ async function makeEvent() {
   $("createErr").textContent = "";
   try {
     await api("/api/events", post({name: $("eventName").value, capacity: $("capacity").value,
-                                   open_in: $("openIn").value}));
-    $("eventName").value = ""; $("capacity").value = ""; $("openIn").value = "0";
+                                   open_in: $("openIn").value, close_in: $("closeIn").value}));
+    $("eventName").value = ""; $("capacity").value = "";
+    $("openIn").value = "0"; $("closeIn").value = "0";
     // 목록은 롱 폴링이 자동으로 갱신하므로 다시 불러올 필요 없음
   } catch (e) { $("createErr").textContent = e.message; }
 }
@@ -448,12 +471,14 @@ function showTicket(number, nick) {
   $("mine").classList.remove("hidden");
 }
 
+// 오픈 카운트다운, 마감까지 남은 시간, 뽑기 버튼 상태
 function updateOpen() {
   if (!ev) return;
   const waiting = now() < ev.open_at;
-  const full = count >= ev.capacity;
+  const full = isClosed(ev, count);
   $("countdown").classList.toggle("hidden", !waiting);
   $("cdTime").textContent = fmt(ev.open_at - now());
+  $("closeLeft").textContent = ev.close_at === null ? "없음" : timeOver(ev) ? "종료" : fmt(ev.close_at - now());
   $("drawBtn").disabled = waiting || full;
   $("drawBtn").textContent = waiting ? "오픈 대기 중" : full ? "마감되었습니다" : "번호표 뽑기";
   if (!full) {
@@ -463,7 +488,7 @@ function updateOpen() {
 }
 
 function updateStatus() {
-  const full = count >= ev.capacity;
+  const full = isClosed(ev, count);
   const pct = Math.min(100, Math.round(count / ev.capacity * 100));
   $("total").textContent = count;
   $("left").textContent = Math.max(0, ev.capacity - count);
@@ -473,9 +498,13 @@ function updateStatus() {
   if (full) {
     $("status").textContent = "마감";
     $("status").className = "badge full";
-    $("closedBanner").textContent = ev.closed_sec !== null && ev.closed_sec !== undefined
-      ? `선착순 마감 · 오픈 후 ${ev.closed_sec.toFixed(2)}초 만에 마감됐어요`
-      : "선착순 마감되었습니다";
+    if (count >= ev.capacity) {
+      $("closedBanner").textContent = ev.closed_sec !== null && ev.closed_sec !== undefined
+        ? `선착순 마감 · 오픈 후 ${ev.closed_sec.toFixed(2)}초 만에 마감됐어요`
+        : "선착순 마감되었습니다";
+    } else {
+      $("closedBanner").textContent = `모집 시간이 끝나 마감되었습니다 (${count}명 참여)`;
+    }
   }
   $("closedBanner").classList.toggle("hidden", !full);
   updateOpen();
@@ -544,14 +573,19 @@ function share() {
   $("shareMsg").textContent = ok ? "링크를 복사했어요. 단톡방에 붙여 넣으세요!" : "위 링크를 복사해서 공유하세요.";
 }
 
-// 카운트다운은 서버에 묻지 않고 화면에서 계산 (0초가 된 순간에만 목록을 다시 그림)
+// 카운트다운은 서버에 묻지 않고 화면에서 계산 (0초가 된 순간에만 다시 그림)
 function tick() {
-  if (ev) { updateOpen(); return; }
+  if (ev) { updateStatus(); return; }
   let crossed = false;
   document.querySelectorAll("[data-open]").forEach(s => {
     const left = Number(s.dataset.open) - now();
     if (left <= 0) crossed = true;
     else s.textContent = `⏰ ${fmt(left)} 후 오픈`;
+  });
+  document.querySelectorAll("[data-close]").forEach(s => {
+    const left = Number(s.dataset.close) - now();
+    if (left <= 0) crossed = true;
+    else s.textContent = `⏱ ${fmt(left)} 후 마감`;
   });
   if (crossed) renderLobby();
 }
